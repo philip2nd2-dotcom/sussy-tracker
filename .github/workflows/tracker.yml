@@ -2,6 +2,11 @@ name: Sussy kontoer tracker
 
 on:
   workflow_dispatch:
+    inputs:
+      test_alarm:
+        description: "Send en testalarm (uden @everyone) når den starter"
+        type: boolean
+        default: false
   schedule:
     - cron: "*/30 * * * *"   # backup: starter den igen, hvis den er stoppet
 
@@ -38,6 +43,7 @@ jobs:
           DISCORD_WEBHOOK_WALLETS: ${{ secrets.DISCORD_WEBHOOK_WALLETS }}
           WALLETS: ${{ secrets.WALLETS }}
           RUN_SECONDS: "20500"
+          TEST_ALARM: ${{ inputs.test_alarm }}
         run: python -u wallet_tracker.py
 
       - name: Gem hvad vi har set
