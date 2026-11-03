@@ -1,0 +1,54 @@
+name: Sussy kontoer tracker
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/30 * * * *"   # backup: starter den igen, hvis den er stoppet
+
+concurrency:
+  group: tracker
+  cancel-in-progress: false
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  track:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install requests
+
+      - name: Hent hvad vi allerede har set
+        uses: actions/cache/restore@v4
+        with:
+          path: seen.json
+          key: seen-${{ github.run_id }}
+          restore-keys: seen-
+
+      - name: Kør tracker (ca. 5,7 timer)
+        env:
+          DISCORD_WEBHOOK_WALLETS: ${{ secrets.DISCORD_WEBHOOK_WALLETS }}
+          WALLETS: ${{ secrets.WALLETS }}
+          RUN_SECONDS: "20500"
+        run: python -u wallet_tracker.py
+
+      - name: Gem hvad vi har set
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: seen.json
+          key: seen-${{ github.run_id }}
+
+      - name: Start næste omgang
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run tracker.yml --ref ${{ github.ref_name }}
