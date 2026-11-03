@@ -11,7 +11,7 @@ MIN_USD = 0          # ignorer trades under dette beløb (i $)
 INTERVAL = 5         # sekunder mellem hver runde
 # -----------------------
 
-API = "https://data-api.polymarket.com/activity"
+API = "https://data-api.polymarket.com/v2/activity"  # v1 blev lukket nov. 2026
 STATE = os.path.join(MAPPE, "seen.json")
 
 
@@ -67,7 +67,10 @@ def post(webhook, payload):
 def hent(wallet):
     r = requests.get(API, params={"user": wallet, "type": "TRADE", "limit": 50}, timeout=10)
     r.raise_for_status()
-    return r.json()
+    # v2 bruger snake_case-navne - oversæt til de navne resten af koden bruger
+    navne = {"transaction_hash": "transactionHash", "token_id": "asset", "usdc_size": "usdcSize",
+             "event_slug": "eventSlug", "condition_id": "conditionId", "proxy_wallet": "proxyWallet"}
+    return [{navne.get(k, k): v for k, v in t.items()} for t in r.json().get("data") or []]
 
 
 def visningsnavn(wallet, note):
