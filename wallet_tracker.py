@@ -89,36 +89,52 @@ def visningsnavn(wallet, note):
     return f"{navn} ({note})" if note else navn
 
 
-def send_trade(webhook, wallet, note, gruppe):
+def send_trade(webhook, wallet, note, gruppe, test=False):
     t = gruppe[0]
-    usd = sum(x.get("usdcSize", 0) for x in gruppe)
-    shares = sum(x.get("size", 0) for x in gruppe)
-    pris = usd / shares if shares else t.get("price", 0)
+    usd = sum(x.get("usdcSize", 0) or 0 for x in gruppe)
+    shares = sum(x.get("size", 0) or 0 for x in gruppe)
+    pris = usd / shares if shares else (t.get("price") or 0)
     kob = t.get("side") == "BUY"
+    navn = names.get(wallet) or t.get("name") or note or (wallet[:6] + "…" + wallet[-4:])
+    side = str(t.get("outcome", "?"))
+    profil = f"https://polymarket.com/profile/{wallet}"
+    marked = f"https://polymarket.com/event/{t.get('eventSlug', '')}"
+    tx = t.get("transactionHash", "")
+
+    felter = [
+        {"name": "💰 Beløb", "value": f"**${usd:,.2f}**", "inline": True},
+        {"name": "🎯 Side", "value": f"**{side}**", "inline": True},
+        {"name": "📈 Pris", "value": f"{pris*100:.1f}¢  ·  odds {1/pris:.2f}" if pris else "-", "inline": True},
+    ]
+    if kob and shares:
+        felter.append({"name": "💸 Mulig gevinst", "value": f"${shares - usd:,.2f}", "inline": True})
+    felter.append({"name": "🧾 Handler", "value": str(len(gruppe)), "inline": True})
+    felter.append({"name": "👤 Wallet", "value": f"`{wallet[:6]}…{wallet[-4:]}`", "inline": True})
+    links = f"[Profil]({profil})  ·  [Marked]({marked})"
+    if tx:
+        links += f"  ·  [Transaktion](https://polygonscan.com/tx/{tx})"
+    felter.append({"name": "🔗 Links", "value": links, "inline": False})
+
     embed = {
+        "author": {"name": f"🚨 SUSSY BET  ·  {navn}", "url": profil},
         "title": t.get("title", "?"),
-        "url": f"https://polymarket.com/event/{t.get('eventSlug', '')}",
-        "color": 0xFF0000,  # altid rød alarm
-        "author": {"name": f"{visningsnavn(wallet, note)} {'KØBTE' if kob else 'SOLGTE'}",
-                   "url": f"https://polymarket.com/profile/{wallet}"},
-        "fields": [
-            {"name": "Side", "value": str(t.get("outcome", "?")), "inline": True},
-            {"name": "Beløb", "value": f"${usd:,.2f}", "inline": True},
-            {"name": "Odds", "value": f"{pris*100:.1f}¢ ({1/pris:.2f})" if pris else "-", "inline": True},
-        ],
-        "footer": {"text": wallet},
+        "url": marked,
+        "description": f"**{navn}** {'købte' if kob else 'solgte'} **{side}** for **${usd:,.0f}**",
+        "color": 0xE01E1E,  # altid rød alarm
+        "fields": felter,
+        "footer": {"text": "Sussy kontoer  ·  322 | Match Watch" + ("  ·  TEST" if test else "")},
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t.get("timestamp", time.time()))),
     }
     if t.get("icon"):
         embed["thumbnail"] = {"url": t["icon"]}
-    post(webhook, {
-        "username": "Sussy kontoer",
-        # @everyone giver en notifikation til alle på serveren
-        "content": f"@everyone 🚨 **{visningsnavn(wallet, note)}** har lagt et bet: "
-                   f"{'KØB' if kob else 'SALG'} ${usd:,.0f} på {t.get('outcome', '?')}",
-        "allowed_mentions": {"parse": ["everyone"]},
-        "embeds": [embed],
-    })
+    if test:
+        indhold = "🧪 **Test af alarm** - sådan ser en alarm ud (ingen @everyone ved test)"
+        mentions = {"parse": []}
+    else:
+        indhold = f"@everyone 🚨 **{navn}** har lagt et bet på **{side}** - ${usd:,.0f}"
+        mentions = {"parse": ["everyone"]}
+    post(webhook, {"username": "Sussy kontoer", "content": indhold,
+                   "allowed_mentions": mentions, "embeds": [embed]})
 
 
 def tjek_navn(webhook, wallet, note, trades):
@@ -132,11 +148,14 @@ def tjek_navn(webhook, wallet, note, trades):
     names[wallet] = nyt
     if gammelt and gammelt != nyt:
         post(webhook, {"username": "Sussy kontoer", "embeds": [{
-            "title": "Navneskift",
-            "description": f"**{gammelt}** hedder nu **{nyt}**\nSamme wallet: `{wallet}`"
-                           + (f"\nNote: {note}" if note else ""),
+            "author": {"name": "🔄 NAVNESKIFT"},
+            "title": f"{gammelt}  ➜  {nyt}",
             "url": f"https://polymarket.com/profile/{wallet}",
+            "description": f"Samme wallet, nyt navn. Vi følger den stadig.\n`{wallet}`"
+                           + (f"\nNote: {note}" if note else ""),
             "color": 0xF1C40F,
+            "footer": {"text": "Sussy kontoer  ·  322 | Match Watch"},
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         }]})
         print(time.strftime("%H:%M:%S"), "navneskift:", gammelt, "->", nyt)
 
@@ -171,6 +190,14 @@ STOP = time.time() + float(os.environ.get("RUN_SECONDS", "inf"))
 webhook = laes_webhook()
 tjek_hook = requests.get(webhook, timeout=10)
 print("Webhook-tjek:", tjek_hook.status_code, "OK" if tjek_hook.ok else tjek_hook.text[:200])
+if os.environ.get("TEST_ALARM") == "true":
+    send_trade(webhook, "0xaaad37f3bbb45af95818e20e554f8b21371f29e0", "swiftfoxx", [{
+        "title": "Counter-Strike: DNK vs Wingman (BO3) - Exort Fiesta Group Stage",
+        "eventSlug": "cs2-dnk2-wing-2026-11-02", "outcome": "Wingman", "side": "BUY",
+        "usdcSize": 72.0, "size": 200.0, "transactionHash": "",
+        "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/counter-strike-image-16c415c538.png",
+        "timestamp": time.time()}], test=True)
+    print("Testalarm sendt")
 print("Wallet tracker kører... (luk vinduet for at stoppe)")
 print("Tilføj/fjern wallets i wallets.txt - det virker uden genstart.")
 while time.time() < STOP:
