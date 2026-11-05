@@ -1,7 +1,7 @@
 # Wallet tracker - sender en Discord-besked, når en af de mistænkte
 # Polymarket-wallets i wallets.txt laver et trade.
 # Følger wallet-adressen, så navneskift ikke gør noget (og meldes i Discord).
-import json, os, time, requests
+import json, os, signal, time, requests
 
 MAPPE = os.path.dirname(os.path.abspath(__file__))
 
@@ -50,10 +50,12 @@ else:
 seen = set(d.get("seen", []))
 seeded = set(d.get("seeded", []))
 names = d.get("names", {})
+status_id = d.get("status_id")  # id på bot-status-beskeden i Discord
 
 
 def gem():
-    json.dump({"seen": list(seen)[-20000:], "seeded": list(seeded), "names": names},
+    json.dump({"seen": list(seen)[-20000:], "seeded": list(seeded), "names": names,
+               "status_id": status_id},
               open(STATE, "w", encoding="utf-8"))
 
 
@@ -184,6 +186,64 @@ def tjek(webhook, wallet, note):
             print(time.strftime("%H:%M:%S"), visningsnavn(wallet, note), g[0].get("side"), g[0].get("title"))
 
 
+# ---- BOT STATUS (kanalen #bot-status) ----
+STATUS_HOOK = os.environ.get("DISCORD_WEBHOOK_STATUS", "").strip()
+STATUS_HVER = 60  # sekunder mellem opdateringer
+sidst_status = 0
+
+
+def opdater_status(wallets, tilstand="aktiv"):
+    """Holder én besked i #bot-status opdateret: kører botten, og hvem overvåges."""
+    global status_id, sidst_status
+    if not STATUS_HOOK.startswith("https://"):
+        return
+    sidst_status = time.time()
+    nu = int(time.time())
+    if tilstand == "aktiv":
+        titel, farve = "🟢  BOT ACTIVE", 0x2ECC71
+        tekst = f"Botten kører og tjekker alle konti hvert {INTERVAL}. sekund."
+    elif tilstand == "skifter":
+        titel, farve = "🟡  SKIFTER OMGANG", 0xF1C40F
+        tekst = "Botten starter en ny omgang - er tilbage om et øjeblik."
+    else:
+        titel, farve = "🔴  BOT STOPPET", 0xE01E1E
+        tekst = "Botten kører ikke lige nu."
+    liste = "\n".join(
+        f"{i}. [{names.get(w) or note or w[:6] + '…' + w[-4:]}](https://polymarket.com/profile/{w})"
+        for i, (w, note) in enumerate(wallets.items(), 1)) or "Ingen konti på listen"
+    embed = {
+        "title": titel,
+        "description": f"{tekst}\n\n**Sidst tjekket:** <t:{nu}:R>  (<t:{nu}:T>)",
+        "color": farve,
+        "fields": [{"name": f"👀 Overvåger {len(wallets)} konti", "value": liste[:1024], "inline": False}],
+        "footer": {"text": "Står 'sidst tjekket' til mere end 10 min siden, er botten stoppet  ·  322 | Match Watch"},
+    }
+    payload = {"username": "Bot status", "embeds": [embed]}
+    try:
+        if status_id:
+            r = requests.patch(f"{STATUS_HOOK}/messages/{status_id}", json=payload, timeout=10)
+            if r.ok:
+                return
+            if r.status_code != 404:
+                print("bot-status kunne ikke opdateres:", r.status_code, r.text[:200])
+                return
+        r = requests.post(STATUS_HOOK + "?wait=true", json=payload, timeout=10)
+        if r.ok:
+            status_id = r.json().get("id")
+            gem()
+        else:
+            print("bot-status kunne ikke sendes:", r.status_code, r.text[:200])
+    except Exception as e:
+        print("fejl ved bot-status:", e)
+
+
+def _stop(*_):
+    raise SystemExit(0)
+
+
+signal.signal(signal.SIGTERM, _stop)
+
+
 # På GitHub kører hver omgang i max ~5,7 timer, derefter tager den næste over.
 STOP = time.time() + float(os.environ.get("RUN_SECONDS", "inf"))
 
@@ -200,16 +260,25 @@ if os.environ.get("TEST_ALARM") == "true":
     print("Testalarm sendt")
 print("Wallet tracker kører... (luk vinduet for at stoppe)")
 print("Tilføj/fjern wallets i wallets.txt - det virker uden genstart.")
-while time.time() < STOP:
-    try:
-        wallets = laes_wallets()
-    except Exception as e:
-        print("kunne ikke læse wallet-listen:", e)
-        wallets = {}
-    for w, note in wallets.items():
+wallets = {}
+slut = "stoppet"
+try:
+    while time.time() < STOP:
         try:
-            tjek(webhook, w, note)
+            wallets = laes_wallets()
         except Exception as e:
-            print("fejl ved", w, ":", e)
+            print("kunne ikke læse wallet-listen:", e)
+            wallets = {}
+        for w, note in wallets.items():
+            try:
+                tjek(webhook, w, note)
+            except Exception as e:
+                print("fejl ved", w, ":", e)
+        gem()
+        if time.time() - sidst_status >= STATUS_HVER:
+            opdater_status(wallets)
+        time.sleep(INTERVAL)
+    slut = "skifter"  # tiden er gået - næste omgang starter af sig selv
+finally:
+    opdater_status(wallets, slut)
     gem()
-    time.sleep(INTERVAL)
