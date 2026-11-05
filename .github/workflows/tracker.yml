@@ -41,6 +41,7 @@ jobs:
       - name: Kør tracker (ca. 5,7 timer)
         env:
           DISCORD_WEBHOOK_WALLETS: ${{ secrets.DISCORD_WEBHOOK_WALLETS }}
+          DISCORD_WEBHOOK_STATUS: ${{ secrets.DISCORD_WEBHOOK_STATUS }}
           WALLETS: ${{ secrets.WALLETS }}
           RUN_SECONDS: "20500"
           TEST_ALARM: ${{ inputs.test_alarm }}
