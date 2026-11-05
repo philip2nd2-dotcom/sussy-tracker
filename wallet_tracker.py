@@ -208,14 +208,25 @@ def opdater_status(wallets, tilstand="aktiv"):
     else:
         titel, farve = "🔴  BOT STOPPET", 0xE01E1E
         tekst = "Botten kører ikke lige nu."
-    liste = "\n".join(
-        f"{i}. [{names.get(w) or note or w[:6] + '…' + w[-4:]}](https://polymarket.com/profile/{w})"
-        for i, (w, note) in enumerate(wallets.items(), 1)) or "Ingen konti på listen"
+    linjer = [f"{i}. [{names.get(w) or note or w[:6] + '…' + w[-4:]}](https://polymarket.com/profile/{w})"
+              for i, (w, note) in enumerate(wallets.items(), 1)]
+    # Discord tillader max 1024 tegn pr. felt - del listen op i flere felter
+    bidder, bid = [], ""
+    for linje in linjer:
+        if bid and len(bid) + 1 + len(linje) > 1024:
+            bidder.append(bid)
+            bid = ""
+        bid = (bid + "\n" + linje) if bid else linje
+    if bid:
+        bidder.append(bid)
+    felter_status = [{"name": f"👀 Overvåger {len(wallets)} konti" if n == 0 else "\u200b",
+                      "value": v, "inline": False}
+                     for n, v in enumerate(bidder or ["Ingen konti på listen"])]
     embed = {
         "title": titel,
         "description": f"{tekst}\n\n**Sidst tjekket:** <t:{nu}:R>  (<t:{nu}:T>)",
         "color": farve,
-        "fields": [{"name": f"👀 Overvåger {len(wallets)} konti", "value": liste[:1024], "inline": False}],
+        "fields": felter_status,
         "footer": {"text": "Står 'sidst tjekket' til mere end 10 min siden, er botten stoppet  ·  322 | Match Watch"},
     }
     payload = {"username": "Bot status", "embeds": [embed]}
