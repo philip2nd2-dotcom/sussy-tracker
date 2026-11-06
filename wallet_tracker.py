@@ -28,6 +28,8 @@ def laes_wallets():
     wallets = {}
     # På GitHub ligger listen i den hemmelige variabel WALLETS (så den ikke er offentlig)
     tekst = os.environ.get("WALLETS") or open(os.path.join(MAPPE, "wallets.txt"), encoding="utf-8").read()
+    # Ekstra konti kan ligge i den hemmelige variabel WALLETS_EXTRA (samme format)
+    tekst += "\n" + os.environ.get("WALLETS_EXTRA", "")
     for linje in tekst.splitlines():
         linje = linje.strip()
         if not linje or linje.startswith("#"):
