@@ -126,7 +126,7 @@ def send_trade(webhook, wallet, note, gruppe, test=False):
         "description": f"**{navn}** {'købte' if kob else 'solgte'} **{side}** for **${usd:,.0f}**",
         "color": 0xE01E1E,  # altid rød alarm
         "fields": felter,
-        "footer": {"text": "Sussy kontoer  ·  322 | Match Watch" + ("  ·  TEST" if test else "")},
+        "footer": {"text": "Sussytracker v2  ·  322 | Match Watch" + ("  ·  TEST" if test else "")},
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t.get("timestamp", time.time()))),
     }
     if t.get("icon"):
@@ -137,7 +137,7 @@ def send_trade(webhook, wallet, note, gruppe, test=False):
     else:
         indhold = f"@everyone 🚨 **{navn}** har lagt et bet på **{side}** - ${usd:,.0f}"
         mentions = {"parse": ["everyone"]}
-    post(webhook, {"username": "Sussy kontoer", "content": indhold,
+    post(webhook, {"username": "Sussytracker v2", "content": indhold,
                    "allowed_mentions": mentions, "embeds": [embed]})
 
 
@@ -151,14 +151,14 @@ def tjek_navn(webhook, wallet, note, trades):
     gammelt = names.get(wallet)
     names[wallet] = nyt
     if gammelt and gammelt != nyt:
-        post(webhook, {"username": "Sussy kontoer", "embeds": [{
+        post(webhook, {"username": "Sussytracker v2", "embeds": [{
             "author": {"name": "🔄 NAVNESKIFT"},
             "title": f"{gammelt}  ➜  {nyt}",
             "url": f"https://polymarket.com/profile/{wallet}",
             "description": f"Samme wallet, nyt navn. Vi følger den stadig.\n`{wallet}`"
                            + (f"\nNote: {note}" if note else ""),
             "color": 0xF1C40F,
-            "footer": {"text": "Sussy kontoer  ·  322 | Match Watch"},
+            "footer": {"text": "Sussytracker v2  ·  322 | Match Watch"},
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         }]})
         print(time.strftime("%H:%M:%S"), "navneskift:", gammelt, "->", nyt)
@@ -202,13 +202,13 @@ def opdater_status(wallets, tilstand="aktiv"):
     sidst_status = time.time()
     nu = int(time.time())
     if tilstand == "aktiv":
-        titel, farve = "🟢  BOT ACTIVE", 0x2ECC71
+        titel, farve = "🟢  SUSSYTRACKER V2 · ACTIVE", 0x2ECC71
         tekst = f"Botten kører og tjekker alle konti hvert {INTERVAL}. sekund."
     elif tilstand == "skifter":
-        titel, farve = "🟡  SKIFTER OMGANG", 0xF1C40F
+        titel, farve = "🟡  SUSSYTRACKER V2 · SKIFTER OMGANG", 0xF1C40F
         tekst = "Botten starter en ny omgang - er tilbage om et øjeblik."
     else:
-        titel, farve = "🔴  BOT STOPPET", 0xE01E1E
+        titel, farve = "🔴  SUSSYTRACKER V2 · STOPPET", 0xE01E1E
         tekst = "Botten kører ikke lige nu."
     linjer = [f"{i}. [{names.get(w) or note or w[:6] + '…' + w[-4:]}](https://polymarket.com/profile/{w})"
               for i, (w, note) in enumerate(wallets.items(), 1)]
@@ -231,7 +231,7 @@ def opdater_status(wallets, tilstand="aktiv"):
         "fields": felter_status,
         "footer": {"text": "Står 'sidst tjekket' til mere end 10 min siden, er botten stoppet  ·  322 | Match Watch"},
     }
-    payload = {"username": "Bot status", "embeds": [embed]}
+    payload = {"username": "Sussytracker v2 · status", "embeds": [embed]}
     try:
         if status_id:
             r = requests.patch(f"{STATUS_HOOK}/messages/{status_id}", json=payload, timeout=10)
